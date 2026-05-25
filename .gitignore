@@ -1,0 +1,123 @@
+# ---------------------------------------------------------
+# Enterprise Full-Stack Ignore Rules (React + FastAPI)
+# ---------------------------------------------------------
+
+# ---------------------------------------------------------
+# OS / Editor / IDE
+# ---------------------------------------------------------
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.iml
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.swp
+*.swo
+
+# ---------------------------------------------------------
+# Environment / Secrets
+# ---------------------------------------------------------
+.env
+.env.*
+!.env.example
+!.env.*.example
+backend/.env
+backend/.env.*
+frontend/.env
+frontend/.env.*
+*.pem
+*.key
+*.crt
+
+# ---------------------------------------------------------
+# Python / FastAPI backend
+# ---------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+backend/.venv/
+backend/venv/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+
+# Build / packaging
+build/
+dist/
+.eggs/
+*.egg-info/
+pip-wheel-metadata/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# ---------------------------------------------------------
+# Node.js / React frontend
+# ---------------------------------------------------------
+node_modules/
+frontend/node_modules/
+
+# Vite / React outputs
+frontend/dist/
+frontend/dist-ssr/
+*.tsbuildinfo
+
+# JS tooling logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ---------------------------------------------------------
+# Docker / container artifacts
+# ---------------------------------------------------------
+*.pid
+*.seed
+*.pid.lock
+*.tar
+
+# Docker compose local overrides
+docker-compose.override.yml
+
+# ---------------------------------------------------------
+# Generic cache / temp
+# ---------------------------------------------------------
+.cache/
+.tmp/
+tmp/
+temp/
+*.tmp
+
+# ---------------------------------------------------------
+# Test / coverage outputs
+# ---------------------------------------------------------
+coverage/
+.nyc_output/
+
+# ---------------------------------------------------------
+# Misc build outputs (multi-language safety)
+# ---------------------------------------------------------
+out/
+release/
+debug/

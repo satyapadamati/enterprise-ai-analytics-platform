@@ -128,7 +128,7 @@ jobs:
 
       - name: Test frontend container
         run: |
-          docker run -d --name frontend-test -p 8080:80 ${{ vars.FRONTEND_IMAGE_NAME }}:${{ github.sha }}
+          docker run -d --name frontend-test --add-host backend:127.0.0.1 -p 8080:80 ${{ vars.FRONTEND_IMAGE_NAME }}:${{ github.sha }}
           for i in {1..15}; do
             if curl -sf http://localhost:8080/; then
               echo "Frontend is healthy"

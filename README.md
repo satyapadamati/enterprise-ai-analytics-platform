@@ -218,6 +218,24 @@ Recommended target architecture:
 - AWS Secrets Manager or SSM Parameter Store for backend secrets
 - CloudWatch Logs for both services
 
+## GitHub Actions Setup
+Use GitHub repository settings for CI/CD values instead of hardcoding them in the workflow.
+
+### Add GitHub Secrets
+Go to `Settings` > `Secrets and variables` > `Actions` > `New repository secret` and add:
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_ACCOUNT_ID`
+- `AWS_REGION`
+
+### Add GitHub Variables
+Go to `Settings` > `Secrets and variables` > `Actions` > `Variables` > `New repository variable` and add:
+- `BACKEND_IMAGE_NAME` with value `ai-analytics-backend`
+- `FRONTEND_IMAGE_NAME` with value `ai-analytics-frontend`
+
+### If you use GitHub Environments
+Create an environment like `production` and store the same secrets there if you want different values for deploy jobs.
+
 ## GitHub Actions CI/CD Pattern
 Suggested workflows:
 - CI workflow (on pull_request):

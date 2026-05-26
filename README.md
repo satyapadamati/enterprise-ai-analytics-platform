@@ -255,5 +255,4 @@ Suggested workflows:
 - Add policy engine for stricter SQL governance and allow-listing
 - Add semantic model layer for business glossary and metric definitions
 - Add multi-tenant isolation and per-tenant Snowflake routing
-follow all steps
-trigger again
+

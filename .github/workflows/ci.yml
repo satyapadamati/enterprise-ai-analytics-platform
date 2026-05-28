@@ -1,16 +1,224 @@
-name: Debug Workflow
+name: Enterprise CI/CD Pipeline
 
 on:
   push:
     branches:
+      - develop
+      - main
+      - test
+
+  pull_request:
+    branches:
+      - develop
+      - main
       - test
 
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ap-south-2
+
+  BACKEND_ECR_REPO: atlas-backend-test
+  FRONTEND_ECR_REPO: atlas-frontend-test
+
+  ECS_CLUSTER: atlas-ai-test-cluster
+  BACKEND_SERVICE: backend-service
+  FRONTEND_SERVICE: frontend-service
+
 jobs:
-  debug:
+
+  backend-validation:
+    name: Backend Validation
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: backend
+
     steps:
-      - name: Debug
-        run: echo "GitHub Actions is working"
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate FastAPI Import
+        run: |
+          python -c "from app.main import app"
+
+      - name: Run Backend Health Validation
+        run: |
+          timeout 20s bash -c '
+          uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+          sleep 10
+          curl -f http://localhost:8000/api/v1/health
+          '
+
+  frontend-validation:
+    name: Frontend Validation
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup NodeJS
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Lint
+        run: npm run lint
+
+      - name: Build Frontend
+        run: npm run build
+
+  docker-build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+
+    needs:
+      - backend-validation
+      - frontend-validation
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Backend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: false
+          tags: backend-local:${{ github.sha }}
+
+      - name: Build Frontend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: false
+          tags: frontend-local:${{ github.sha }}
+
+  push-ecr:
+    name: Push Images To ECR
+    runs-on: ubuntu-latest
+
+    needs:
+      - docker-build
+
+    if: github.event_name == 'push'
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login To ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build And Push Backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.BACKEND_ECR_REPO }}:latest
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.BACKEND_ECR_REPO }}:${{ github.sha }}
+
+      - name: Build And Push Frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.FRONTEND_ECR_REPO }}:latest
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.FRONTEND_ECR_REPO }}:${{ github.sha }}
+
+  deploy-ecs:
+    name: Deploy To ECS
+    runs-on: ubuntu-latest
+
+    needs:
+      - push-ecr
+
+    if: github.event_name == 'push'
+
+    steps:
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Force Backend Deployment
+        run: |
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service $BACKEND_SERVICE \
+            --force-new-deployment
+
+      - name: Force Frontend Deployment
+        run: |
+          aws ecs update-service \
+            --cluster $ECS_CLUSTER \
+            --service $FRONTEND_SERVICE \
+            --force-new-deployment
+
+  production-health-check:
+    name: Production Health Verification
+    runs-on: ubuntu-latest
+
+    needs:
+      - deploy-ecs
+
+    steps:
+
+      - name: Verify Backend Health
+        run: |
+          sleep 60
+          curl -f http://YOUR-ALB-DNS/api/v1/health
+
+      - name: Verify Frontend Health
+        run: |
+          curl -f http://YOUR-ALB-DNS/

@@ -28,7 +28,7 @@ env:
   BACKEND_ECR_REPO: atlas-backend-test
   FRONTEND_ECR_REPO: atlas-frontend-test
 
-  ECS_CLUSTER: atlas-ai-test-cluster
+  ECS_CLUSTER: AI-Test_Cluster
   BACKEND_SERVICE: backend-service
   FRONTEND_SERVICE: frontend-service
 

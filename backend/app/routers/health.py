@@ -7,6 +7,14 @@ from fastapi.responses import JSONResponse
 router = APIRouter()
 
 
+@router.get("/ping", summary="Liveness probe")
+async def ping() -> JSONResponse:
+    return JSONResponse(
+        status_code=200,
+        content={"status": "ok"},
+    )
+
+
 @router.get("/health", summary="Health check")
 async def health_check() -> JSONResponse:
     return JSONResponse(

@@ -173,8 +173,8 @@ jobs:
             ${{ steps.login-ecr.outputs.registry }}/${{ env.FRONTEND_ECR_REPO }}:latest
             ${{ steps.login-ecr.outputs.registry }}/${{ env.FRONTEND_ECR_REPO }}:${{ github.sha }}
 
-  deploy-ecs:
-    name: Deploy To ECS
+  deploy-backend:
+    name: Deploy Backend To ECS
     runs-on: ubuntu-latest
 
     needs:
@@ -184,6 +184,9 @@ jobs:
 
     steps:
 
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -191,34 +194,103 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Force Backend Deployment
-        run: |
-          aws ecs update-service \
-            --cluster $ECS_CLUSTER \
-            --service $BACKEND_SERVICE \
-            --force-new-deployment
+      - name: Login To ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Force Frontend Deployment
+      - name: Download current backend task definition
         run: |
-          aws ecs update-service \
-            --cluster $ECS_CLUSTER \
-            --service $FRONTEND_SERVICE \
-            --force-new-deployment
+          aws ecs describe-task-definition \
+            --task-definition ${{ secrets.BACKEND_TASK_FAMILY }} \
+            --query taskDefinition \
+            > backend-task-def.json
+
+      - name: Render new backend task definition
+        id: render-backend
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: backend-task-def.json
+          container-name: backend
+          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.BACKEND_ECR_REPO }}:${{ github.sha }}
+
+      - name: Deploy backend to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-backend.outputs.task-definition }}
+          service: ${{ env.BACKEND_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
+
+  deploy-frontend:
+    name: Deploy Frontend To ECS
+    runs-on: ubuntu-latest
+
+    needs:
+      - deploy-backend
+
+    if: github.event_name == 'push'
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login To ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Download current frontend task definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition ${{ secrets.FRONTEND_TASK_FAMILY }} \
+            --query taskDefinition \
+            > frontend-task-def.json
+
+      - name: Render new frontend task definition
+        id: render-frontend
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: frontend-task-def.json
+          container-name: frontend
+          image: ${{ steps.login-ecr.outputs.registry }}/${{ env.FRONTEND_ECR_REPO }}:${{ github.sha }}
+
+      - name: Deploy frontend to ECS
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-frontend.outputs.task-definition }}
+          service: ${{ env.FRONTEND_SERVICE }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          wait-for-service-stability: true
 
   production-health-check:
     name: Production Health Verification
     runs-on: ubuntu-latest
 
     needs:
-      - deploy-ecs
+      - deploy-frontend
+
+    if: github.event_name == 'push'
 
     steps:
 
       - name: Verify Backend Health
         run: |
-          sleep 60
-          curl -f http://YOUR-ALB-DNS/api/v1/health
+          for i in {1..10}; do
+            if curl -fsS http://atlas-test-alb-822321844.ap-south-2.elb.amazonaws.com/api/v1/ping; then
+              echo "Backend healthy"
+              break
+            fi
+            echo "Attempt $i failed, retrying in 15s..."
+            sleep 15
+          done
 
       - name: Verify Frontend Health
         run: |
-          curl -f http://YOUR-ALB-DNS/
+          curl -fsS http://atlas-test-alb-822321844.ap-south-2.elb.amazonaws.com/
